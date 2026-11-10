@@ -78,7 +78,7 @@ function Pause-AndScroll($label) {
 }
 
 Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "      USOC v1.3.0 - STEP 3 LIVE MONITOR     " -ForegroundColor Cyan
+Write-Host "      REAL-TIME SYSTEM INTEGRITY MONITOR     " -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "This script will walk you through several checks." -ForegroundColor White
 Write-Host "You will be asked to scroll and review each section." -ForegroundColor White
@@ -582,7 +582,7 @@ trap {
     if ($finalScore -lt 0) { $finalScore = 0 }
 
     $summaryText = "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $finalScore / 100"
-    Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" $summaryText 3447003
+    Send-DiscordWebhook "System Integrity Monitor Stopped / Score" $summaryText 3447003
     break 
 }
 
@@ -689,4 +689,4 @@ Write-Host "Vuln driver loaded (ring 0)   : $sessionVulnDriverLoads" -Foreground
 Write-Host "SCORE: $score / 100" -ForegroundColor $(if ($score -ge 80) { "Green" } elseif ($score -ge 50) { "Yellow" } else { "Red" })
 Write-Host "=============================================" -ForegroundColor Cyan
 
-Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $score / 100" 3447003
+Send-DiscordWebhook "Session Summary Report" "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $score / 100" 3447003
