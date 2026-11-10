@@ -72,7 +72,7 @@ Send-DiscordWebhook "[LIVE MATCH ALERT] INFO Detected - $($initialUserInfo.Usern
 
 function Pause-AndScroll($label) {
     Write-Host ""
-    Write-Host ">>> SCROLL UP AND REVIEW THE $label ABOVE <<<" -ForegroundColor Magenta
+    Write-Host "--- SCROLL UP AND REVIEW THE $label ABOVE ---" -ForegroundColor Magenta
     Write-Host "Press ENTER when you are done reviewing..." -ForegroundColor Yellow
     Read-Host | Out-Null
 }
