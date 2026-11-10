@@ -68,7 +68,7 @@ $initialFields = @(
     @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
 )
 
-Send-DiscordWebhook "[LIVE MATCH ALERT] INFO Detected - $($initialUserInfo.Username)" "```[INFO] USOC v1.3.0 monitor started (All 16 Sections Active)```" 3447003 $initialFields
+Send-DiscordWebhook "[LIVE MATCH ALERT] INFO Detected - $($userInfo.Username)" "```[INFO] USOC v1.3.0 monitor started```" 3447003 $initialFields
 
 function Pause-AndScroll($label) {
     Write-Host ""
@@ -85,8 +85,6 @@ Write-Host "You will be asked to scroll and review each section." -ForegroundCol
 Write-Host "Press ENTER at each prompt to continue." -ForegroundColor Yellow
 Write-Host ""
 
-$checkResults = [ordered]@{}
-
 # --- [1/16] Prefetch ---
 Write-Host "=== [1/16] PREFETCH FILES (Recent Program Launches) ===" -ForegroundColor Cyan
 Write-Host "Prefetch files reveal every program that has been run on this PC." -ForegroundColor White
@@ -100,21 +98,18 @@ try {
         Red "Prefetch folder not found or not accessible. Try running as Administrator."
         Red "Possible tampering or blocking - path missing."
         Send-DiscordWebhook "Tampering / Error Detected" "Prefetch folder not found or not accessible." 15158332
-        $checkResults["Prefetch Files"] = "FAIL"
     } else {
         $prefetchOk = $true
         $pfItems = Get-ChildItem $prefetchPath -Filter "*.pf" -ErrorAction Stop
-        $pfItems | Sort-Object LastWriteTime -Descending | ForEach-Object {
-            $name = $_.Name -replace "-[A-F0-9]+\.pf$", ""
-            Write-Host "$($_.LastWriteTime)  |  $name" -ForegroundColor Yellow
+        foreach ($item in $pfItems) {
+            $name = $item.Name -replace "-[A-F0-9]+\.pf$", ""
+            Write-Host "$($item.LastWriteTime)  |  $name" -ForegroundColor Yellow
         }
-        $checkResults["Prefetch Files"] = "PASS"
     }
 } catch {
     Red "Prefetch folder access denied or error: $($_.Exception.Message)"
     Red "Possible blocking or tampering - check could not complete."
     Send-DiscordWebhook "Tampering / Error Detected" "Prefetch access error: $($_.Exception.Message)" 15158332
-    $checkResults["Prefetch Files"] = "FAIL"
 }
 
 Write-Host ""
@@ -138,23 +133,22 @@ Write-Host ""
 
 $localApp = $env:LOCALAPPDATA
 try {
-    Get-ChildItem $localApp -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 60 | ForEach-Object {
-        if ($_.PSIsContainer) { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor White }
-        else { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor Yellow }
+    $localItems = Get-ChildItem $localApp -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 60
+    foreach ($item in $localItems) {
+        if ($item.PSIsContainer) { Write-Host "$($item.LastWriteTime)  |  $($item.Name)" -ForegroundColor White }
+        else { Write-Host "$($item.LastWriteTime)  |  $($item.Name)" -ForegroundColor Yellow }
     }
-    $checkResults["Local AppData"] = "PASS"
 } catch {
     Red "LocalAppData access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
     Send-DiscordWebhook "Tampering / Error Detected" "LocalAppData access error: $($_.Exception.Message)" 15158332
-    $checkResults["Local AppData"] = "FAIL"
 }
 
 Write-Host ""
 Write-Host "[INSTRUCTION] Look for folders/files you do not recognize:" -ForegroundColor Magenta
-Write-Host "  - Random string folder names (e.g. xKf29a, tmp_loader)" -ForegroundColor White
-Write-Host "  - Cheat-related names (aimware, esp, triggerbot, spoofer, etc.)" -ForegroundColor White
-Write-Host "  - Recently modified folders that do not match any app you use" -ForegroundColor White
+Write-Host "  - Random string folder names" -ForegroundColor White
+Write-Host "  - Cheat-related names" -ForegroundColor White
+Write-Host "  - Recently modified folders" -ForegroundColor White
 Pause-AndScroll "LOCAL APPDATA LIST"
 
 Write-Host "[ACTION] Opening LocalAppData in Explorer..." -ForegroundColor Cyan
@@ -169,16 +163,15 @@ Write-Host ""
 
 $roaming = $env:APPDATA
 try {
-    Get-ChildItem $roaming -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 60 | ForEach-Object {
-        if ($_.PSIsContainer) { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor White }
-        else { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor Yellow }
+    $roamingItems = Get-ChildItem $roaming -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 60
+    foreach ($item in $roamingItems) {
+        if ($item.PSIsContainer) { Write-Host "$($item.LastWriteTime)  |  $($item.Name)" -ForegroundColor White }
+        else { Write-Host "$($item.LastWriteTime)  |  $($item.Name)" -ForegroundColor Yellow }
     }
-    $checkResults["Roaming AppData"] = "PASS"
 } catch {
     Red "Roaming AppData access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
     Send-DiscordWebhook "Tampering / Error Detected" "Roaming AppData access error: $($_.Exception.Message)" 15158332
-    $checkResults["Roaming AppData"] = "FAIL"
 }
 
 Write-Host ""
@@ -203,12 +196,10 @@ try {
     Green "IOAVProtection     : $($mp.IOAVProtectionEnabled)"
     Green "TamperProtection   : $($mp.IsTamperProtected)"
     Green "AntispywareEnabled : $($mp.AntispywareEnabled)"
-    $checkResults["Windows Defender Status"] = "PASS"
 } catch {
     Red "Defender status query failed: $($_.Exception.Message)"
     Red "Possible tampering or WMI/Defender blocked - treat as suspicious."
     Send-DiscordWebhook "Defender Tampering" "Defender status query failed: $($_.Exception.Message)" 15158332
-    $checkResults["Windows Defender Status"] = "FAIL"
 }
 Pause-AndScroll "DEFENDER STATUS"
 Write-Host ""
@@ -224,28 +215,21 @@ try {
         Red "!! Defender Exclusion PATHS found - these should not be here !!"
         $pref.ExclusionPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
         Send-DiscordWebhook "Defender Exclusions Found" "Exclusion Paths: $($pref.ExclusionPath -join ', ')" 15158332
-        $checkResults["Defender Exclusions"] = "WARN"
     } else { Green "No exclusion paths found - GOOD" }
 
     if ($pref.ExclusionProcess) {
         Red "!! Defender Exclusion PROCESSES found !!"
         $pref.ExclusionProcess | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
         Send-DiscordWebhook "Defender Exclusions Found" "Exclusion Processes: $($pref.ExclusionProcess -join ', ')" 15158332
-        $checkResults["Defender Exclusions"] = "WARN"
     } else { Green "No exclusion processes found - GOOD" }
 
     if ($pref.ExclusionExtension) {
         Red "!! Defender Exclusion EXTENSIONS found !!"
         $pref.ExclusionExtension | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
     } else { Green "No exclusion extensions found - GOOD" }
-
-    if (-not $pref.ExclusionPath -and -not $pref.ExclusionProcess) {
-        $checkResults["Defender Exclusions"] = "PASS"
-    }
 } catch {
     Red "Defender preferences query failed: $($_.Exception.Message)"
     Red "Possible tampering or access blocked - treat as suspicious."
-    $checkResults["Defender Exclusions"] = "FAIL"
 }
 Pause-AndScroll "DEFENDER EXCLUSIONS"
 Write-Host "`n"
@@ -299,10 +283,8 @@ try {
 if (-not ($tpmOk -and $virtOk -and $secureBootOk)) {
     Red "REQUIREMENT NOT MET: TPM, Virtualization, and Secure Boot must all be ON. Fix in BIOS/UEFI and re-run."
     Send-DiscordWebhook "Hardware Requirement Failed" "TPM, Virtualization, or Secure Boot is missing/disabled." 15158332
-    $checkResults["Hardware Security (TPM/SB/Virt)"] = "FAIL"
 } else {
     Green "All three requirements satisfied: TPM, Virtualization, Secure Boot are ON."
-    $checkResults["Hardware Security (TPM/SB/Virt)"] = "PASS"
 }
 Pause-AndScroll "TPM / VIRTUALIZATION / SECURE BOOT"
 Write-Host ""
@@ -313,18 +295,14 @@ $hvciOk = $false
 try {
     $hvci = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" -ErrorAction Stop
     $hvciOk = $true
-    if ($hvci.Enabled -eq 1) { 
-        Green "Memory Integrity: ENABLED"
-        $checkResults["Memory Integrity (HVCI)"] = "PASS"
-    } else { 
+    if ($hvci.Enabled -eq 1) { Green "Memory Integrity: ENABLED" }
+    else { 
         Red "Memory Integrity: DISABLED - cheats can inject drivers more easily"
         Send-DiscordWebhook "Security Weakness" "Memory Integrity is DISABLED." 16776960
-        $checkResults["Memory Integrity (HVCI)"] = "WARN"
     }
 } catch {
     Red "HVCI registry read failed: $($_.Exception.Message)"
     Red "Possible tampering or access denied - cannot confirm Memory Integrity status."
-    $checkResults["Memory Integrity (HVCI)"] = "FAIL"
 }
 
 try {
@@ -347,25 +325,22 @@ Write-Host ""
 try {
     $drivers = Get-CimInstance Win32_PnPSignedDriver -ErrorAction Stop
     $unsignedCount = 0
-    $drivers | ForEach-Object {
-        $signed = $_.IsSigned
+    foreach ($drv in $drivers) {
+        $signed = $drv.IsSigned
         if ($null -eq $signed -or -not $signed) {
             $unsignedCount++
-            Yellow "UNSIGNED: $($_.DeviceName) | Driver: $($_.DriverName)"
+            Yellow "UNSIGNED: $($drv.DeviceName) | Driver: $($drv.DriverName)"
         }
     }
     if ($unsignedCount -eq 0) {
         Green "No unsigned drivers reported by WMI (good)."
-        $checkResults["Driver Signatures"] = "PASS"
     } else {
         Red "Found $unsignedCount unsigned driver(s) - review above."
         Send-DiscordWebhook "Unsigned Drivers Found" "Count: $unsignedCount unsigned drivers detected." 15158332
-        $checkResults["Driver Signatures"] = "WARN"
     }
 } catch {
     Red "Driver enumeration failed: $($_.Exception.Message)"
     Red "Possible tampering or WMI blocked - cannot verify driver signatures."
-    $checkResults["Driver Signatures"] = "FAIL"
 }
 Pause-AndScroll "LOADED DRIVERS"
 Write-Host ""
@@ -401,15 +376,12 @@ try {
     }
     if ($suspiciousCount -eq 0) {
         Green "No known DMA/FPGA-related PCI vendor IDs found in enumeration."
-        $checkResults["PCI / DMA Hardware Check"] = "PASS"
     } else {
         Red "Found $suspiciousCount device(s) with DMA/FPGA-associated vendor IDs - investigate."
-        $checkResults["PCI / DMA Hardware Check"] = "FAIL"
     }
 } catch {
     Red "PCI device enumeration failed: $($_.Exception.Message)"
     Red "Possible tampering or access denied - cannot verify PCI configuration."
-    $checkResults["PCI / DMA Hardware Check"] = "FAIL"
 }
 Pause-AndScroll "PCI VENDOR/DEVICE IDs"
 Write-Host ""
@@ -431,30 +403,30 @@ $foundSuspicious = $false
 foreach ($dir in $scanDirs) {
     if (-not (Test-Path $dir -ErrorAction SilentlyContinue)) { continue }
     try {
-        Get-ChildItem $dir -Recurse -Include $bitstreamExt -ErrorAction Stop | ForEach-Object {
+        $bitFiles = Get-ChildItem $dir -Recurse -Include $bitstreamExt -ErrorAction SilentlyContinue
+        foreach ($bf in $bitFiles) {
             $foundSuspicious = $true
-            Yellow "FPGA bitstream/firmware: $($_.FullName)"
-            Send-DiscordWebhook "Suspicious File Found" "FPGA Firmware: $($_.FullName)" 15158332
+            Yellow "FPGA bitstream/firmware: $($bf.FullName)"
+            Send-DiscordWebhook "Suspicious File Found" "FPGA Firmware: $($bf.FullName)" 15158332
         }
-        Get-ChildItem $dir -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
-            $name = $_.Name.ToLower()
-            ($dmaKeywords | Where-Object { $name -like "*$_*" }).Count -gt 0
-        } | Select-Object -First 30 | ForEach-Object {
-            $foundSuspicious = $true
-            Yellow "DMA/fpga-related name: $($_.FullName)"
-            Send-DiscordWebhook "Suspicious File Found" "DMA Related File: $($_.FullName)" 15158332
+        $allFiles = Get-ChildItem $dir -Recurse -File -ErrorAction SilentlyContinue
+        foreach ($f in $allFiles) {
+            $name = $f.Name.ToLower()
+            foreach ($kw in $dmaKeywords) {
+                if ($name -like "*$kw*") {
+                    $foundSuspicious = $true
+                    Yellow "DMA/fpga-related name: $($f.FullName)"
+                    Send-DiscordWebhook "Suspicious File Found" "DMA Related File: $($f.FullName)" 15158332
+                    break
+                }
+            }
         }
     } catch {
         Red "Scan of $dir failed: $($_.Exception.Message)"
     }
 }
-if (-not $foundSuspicious) { 
-    Green "No FPGA bitstreams or obvious DMA-related filenames found in user folders." 
-    $checkResults["FPGA Firmware Scan"] = "PASS"
-} else { 
-    Red "Review the files above - FPGA/DMA firmware or tools may be present." 
-    $checkResults["FPGA Firmware Scan"] = "FAIL"
-}
+if (-not $foundSuspicious) { Green "No FPGA bitstreams or obvious DMA-related filenames found in user folders." }
+else { Red "Review the files above - FPGA/DMA firmware or tools may be present." }
 Pause-AndScroll "FPGA / DMA FIRMWARE SCAN"
 Write-Host ""
 
@@ -462,7 +434,6 @@ Write-Host ""
 Write-Host "=== [11/16] MEMORY & COUNTER BASELINE ===" -ForegroundColor Cyan
 Write-Host "Memory timing is monitored continuously while the process list runs below. Press CTRL+C to stop and see your score." -ForegroundColor Yellow
 Write-Host ""
-$checkResults["Memory Baseline"] = "PASS"
 
 # --- [12/16] Vulnerable drivers & kernel debugger ---
 Write-Host "=== [12/16] VULNERABLE DRIVERS & KERNEL DEBUGGER ===" -ForegroundColor Cyan
@@ -481,15 +452,9 @@ try {
             Send-DiscordWebhook "Vulnerable Driver Found" "Driver: $name present in System32\drivers" 15158332
         }
     }
-    if (-not $foundVuln) { 
-        Green "No known vulnerable drivers found in System32\drivers." 
-        $checkResults["Vulnerable Drivers / Debugger"] = "PASS"
-    } else {
-        $checkResults["Vulnerable Drivers / Debugger"] = "FAIL"
-    }
+    if (-not $foundVuln) { Green "No known vulnerable drivers found in System32\drivers." }
 } catch {
     Red "Driver path check failed: $($_.Exception.Message)"
-    $checkResults["Vulnerable Drivers / Debugger"] = "FAIL"
 }
 
 try {
@@ -545,7 +510,6 @@ foreach ($rk in $runKeys) {
         }
     }
 }
-$checkResults["Startup Run Keys"] = "PASS"
 Pause-AndScroll "STARTUP / RUN KEYS"
 Write-Host ""
 
@@ -557,14 +521,13 @@ try {
         $mb = Get-ChildItem $mbPath -Recurse -ErrorAction Stop
         if ($mb) {
             Red "Malwarebytes registry entries detected:"
-            $mb | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Red }
+            foreach ($mEntry in $mb) { Write-Host "  $($mEntry.Name)" -ForegroundColor Red }
         } else { Green "No suspicious Malwarebytes registry entries" }
     } else { Yellow "Malwarebytes not detected on this system" }
 } catch {
     Red "Malwarebytes registry read failed: $($_.Exception.Message)"
     Red "Possible access denied - treat as suspicious."
 }
-$checkResults["Malwarebytes Exclusions"] = "PASS"
 Pause-AndScroll "MALWAREBYTES SECTION"
 Write-Host ""
 
@@ -575,19 +538,17 @@ Write-Host ""
 
 $downloadsDir = [Environment]::GetFolderPath('UserProfile') + "\Downloads"
 try {
-    Get-ChildItem $downloadsDir -Recurse -ErrorAction Stop | Where-Object { $_.Extension -match "\.(exe|dll|sys|bat|ps1|vbs|cmd)$" } |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 40 | ForEach-Object {
-            Write-Host "$($_.LastWriteTime)  |  $($_.FullName)" -ForegroundColor Yellow
-            $sig = Get-AuthenticodeSignature $_.FullName -ErrorAction SilentlyContinue
-            if ($sig -and $sig.Status -ne 'Valid') {
-                Red "  ^^ UNSIGNED or INVALID - review"
-            }
+    $dlItems = Get-ChildItem $downloadsDir -Recurse -ErrorAction Stop | Where-Object { $_.Extension -match "\.(exe|dll|sys|bat|ps1|vbs|cmd)$" } | Sort-Object LastWriteTime -Descending | Select-Object -First 40
+    foreach ($dl in $dlItems) {
+        Write-Host "$($dl.LastWriteTime)  |  $($dl.FullName)" -ForegroundColor Yellow
+        $sig = Get-AuthenticodeSignature $dl.FullName -ErrorAction SilentlyContinue
+        if ($sig -and $sig.Status -ne 'Valid') {
+            Red "  ^^ UNSIGNED or INVALID - review"
         }
-    $checkResults["Downloads Folder Scan"] = "PASS"
+    }
 } catch {
     Red "Downloads folder access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
-    $checkResults["Downloads Folder Scan"] = "FAIL"
 }
 
 Write-Host ""
@@ -612,7 +573,8 @@ $loopCount = 0
 $loadedVulnDriversSeen = @{}
 $vulnDriverNames = @('gdrv.sys', 'capcom.sys', 'DBUtil_2_3.sys', 'AsIO.sys', 'RTCore64.sys', 'PROCEXP152.sys')
 try {
-    Get-Process -ErrorAction Stop | ForEach-Object { $known[$_.Id] = $_.ProcessName }
+    $initProcs = Get-Process -ErrorAction Stop
+    foreach ($p in $initProcs) { $known[$p.Id] = $p.ProcessName }
 } catch {
     Red "Initial process snapshot failed: $($_.Exception.Message)"
 }
@@ -621,22 +583,85 @@ Write-Host "Baseline captured. Watching for new processes, memory spikes, and lo
 Write-Host ""
 
 trap { 
-    $failCount = 0; $warnCount = 0; $passCount = 0
-    foreach ($val in $checkResults.Values) {
-        if ($val -eq "FAIL") { $failCount++ }
-        elseif ($val -eq "WARN") { $warnCount++ }
-        elseif ($val -eq "PASS") { $passCount++ }
-    }
-    $overallStatus = if ($failCount -gt 0) { "FAILED" } elseif ($warnCount -gt 0) { "WARNING" } else { "CLEAN" }
+    $finalScore = 100
+    $finalScore -= ($sessionNewProcesses * 2)
+    $finalScore -= ($sessionMemorySpikes * 15)
+    $finalScore -= ($sessionVulnDriverLoads * 30)
+    if ($finalScore -lt 0) { $finalScore = 0 }
 
-    $summaryText = "````nResult: $overallStatus ($failCount FAIL, $warnCount WARN, $passCount PASS)`n`n--- DETAILS ---`n"
-    foreach ($key in$checkResults.Keys) {
-        $statusText =$checkResults[$key]$summaryText += "[$statusText]$key`n"
-    }
-    $summaryText += "```"
+    $summaryText = "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $finalScore / 100"
+    Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" $summaryText 3447003
+    break 
+}
 
-    $finalFields = @(
-        @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true }, @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true } )  Send-DiscordWebhook "[LIVE MATCH ALERT] USOC v1.3.0 - Integrity Report: $overallStatus" $summaryText 3447003 $finalFields break }  while ($true) { Start-Sleep -Seconds 1 $loopCount++  if (($loopCount \% 5) -eq 0) { try { $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue if ($null -ne $lastMemBytes -and $lastMemBytes -gt 0) { $pct = [Math]::Abs($memNow - $lastMemBytes) / $lastMemBytes if ($pct -gt 0.15) { $sessionMemorySpikes++ $ts = Get-Date -Format "HH:mm:ss" Red "[$ts] *** MEMORY SPIKE DETECTED *** (committed change ~$([Math]::Round($pct * 100))\%)" Send-DiscordWebhook "Memory Spike Detected" "Time: $ts \vert{} Change: ~$([Math]::Round($pct * 100))\%" 16776960 } } $lastMemBytes = $memNow } catch { }  try { $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop foreach ($drv in $loaded) { $path = $drv.PathName if (-not $path) { continue } $pathLower = $path.ToLower() foreach ($vuln in $vulnDriverNames) { if ($pathLower -like "*$($vuln.ToLower())*" -and -not $loadedVulnDriversSeen[$path]) { $loadedVulnDriversSeen[$path] = $true $sessionVulnDriverLoads++ $ts = Get-Date -Format "HH:mm:ss" Red "[$ts] *** VULNERABLE DRIVER LOADED (RING 0) ***: $vuln" Red "    Path: $path - Ring 0 code (e.g. DbgPrint) may be executing." Send-DiscordWebhook "Vulnerable Driver Loaded (Ring 0)" "Time: $ts \vert{} Driver: $vuln \vert{} Path: $path" 15158332 } } } } catch { } }  $current = $null try { $current = Get-Process -ErrorAction Stop } catch { continue } if (-not $current) { continue }  foreach ($proc in $current) { if (-not $known.ContainsKey($proc.Id)) { $procPath = $null try { $procPath = $proc.Path } catch { }  $timestamp = Get-Date -Format "HH:mm:ss" $hash = "" try { if ($procPath -and (Test-Path $procPath -ErrorAction SilentlyContinue)) { $hash = (Get-FileHash $procPath -Algorithm MD5 -ErrorAction SilentlyContinue).Hash } } catch { }  $sessionNewProcesses++ Write-Host "[$timestamp] NEW PROCESS" -ForegroundColor Red -NoNewline Write-Host " \vert{} Name: " -NoNewline Write-Host $proc.ProcessName -ForegroundColor Yellow -NoNewline Write-Host " \vert{} PID: $($proc.Id)" -ForegroundColor White if ($procPath) { Write-Host "          Path: $procPath" -ForegroundColor DarkYellow } else { Write-Host "          Path: (access denied or unknown)" -ForegroundColor Red } if ($hash) { Write-Host "          MD5:  $hash" -ForegroundColor DarkCyan }  Send-DiscordWebhook "New Process Started" "Time: $timestamp`nProcess: $($proc.ProcessName)`nPID: $($proc.Id)`nPath: $procPath`nMD5: $hash" 16776960
+while ($true) {
+    Start-Sleep -Seconds 1
+    $loopCount++
+
+    if (($loopCount % 5) -eq 0) {
+        try {
+            $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue
+            if ($null -ne $lastMemBytes -and $lastMemBytes -gt 0) {
+                $pct = [Math]::Abs($memNow - $lastMemBytes) / $lastMemBytes
+                if ($pct -gt 0.15) {
+                    $sessionMemorySpikes++
+                    $ts = Get-Date -Format "HH:mm:ss"
+                    Red "[$ts] *** MEMORY SPIKE DETECTED *** (committed change ~$([Math]::Round($pct * 100))%)"
+                    Send-DiscordWebhook "Memory Spike Detected" "Time: $ts | Change: ~$([Math]::Round($pct * 100))%" 16776960
+                }
+            }
+            $lastMemBytes = $memNow
+        } catch { }
+
+        try {
+            $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop
+            foreach ($drv in $loaded) {
+                $path = $drv.PathName
+                if (-not $path) { continue }
+                $pathLower = $path.ToLower()
+                foreach ($vuln in $vulnDriverNames) {
+                    if ($pathLower -like "*$($vuln.ToLower())*" -and -not $loadedVulnDriversSeen[$path]) {
+                        $loadedVulnDriversSeen[$path] = $true
+                        $sessionVulnDriverLoads++
+                        $ts = Get-Date -Format "HH:mm:ss"
+                        Red "[$ts] *** VULNERABLE DRIVER LOADED (RING 0) ***: $vuln"
+                        Red "    Path: $path - Ring 0 code (e.g. DbgPrint) may be executing."
+                        Send-DiscordWebhook "Vulnerable Driver Loaded (Ring 0)" "Time: $ts | Driver: $vuln | Path: $path" 15158332
+                    }
+                }
+            }
+        } catch { }
+    }
+
+    $current = $null
+    try { $current = Get-Process -ErrorAction Stop }
+    catch { continue }
+    if (-not $current) { continue }
+
+    foreach ($proc in $current) {
+        if (-not $known.ContainsKey($proc.Id)) {
+            $procPath = $null
+            try { $procPath = $proc.Path }
+            catch { }
+
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            $hash = ""
+            try {
+                if ($procPath -and (Test-Path $procPath -ErrorAction SilentlyContinue)) {
+                    $hash = (Get-FileHash $procPath -Algorithm MD5 -ErrorAction SilentlyContinue).Hash
+                }
+            } catch { }
+
+            $sessionNewProcesses++
+            Write-Host "[$timestamp] NEW PROCESS" -ForegroundColor Red -NoNewline
+            Write-Host " | Name: " -NoNewline
+            Write-Host $proc.ProcessName -ForegroundColor Yellow -NoNewline
+            Write-Host " | PID: $($proc.Id)" -ForegroundColor White
+            if ($procPath) { Write-Host "          Path: $procPath" -ForegroundColor DarkYellow }
+            else { Write-Host "          Path: (access denied or unknown)" -ForegroundColor Red }
+            if ($hash) { Write-Host "          MD5:  $hash" -ForegroundColor DarkCyan }
+
+            Send-DiscordWebhook "New Process Started" "Time: $timestamp`nProcess: $($proc.ProcessName)`nPID: $($proc.Id)`nPath: $procPath`nMD5: $hash" 16776960
 
             try {
                 $start = $proc.StartTime
@@ -652,12 +677,15 @@ trap {
         }
     }
 
-    $currentIds = $current | Select-Object -ExpandProperty Id
-    $deadIds = @($known.Keys | Where-Object { $_ -notin $currentIds })
+    $currentIds = @()
+    foreach ($cp in $current) { $currentIds += $cp.Id }
+    
+    $deadIds = @()
+    foreach ($kid in $known.Keys) {
+        if ($currentIds -notcontains $kid) { $deadIds += $kid }
+    }
     foreach ($id in $deadIds) { $known.Remove($id) }
 }
-
-$checkResults["Live Process Monitor"] = "PASS"
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
@@ -674,24 +702,4 @@ Write-Host "Vuln driver loaded (ring 0)   : $sessionVulnDriverLoads" -Foreground
 Write-Host "SCORE: $score / 100" -ForegroundColor $(if ($score -ge 80) { "Green" } elseif ($score -ge 50) { "Yellow" } else { "Red" })
 Write-Host "=============================================" -ForegroundColor Cyan
 
-$failCount = 0; $warnCount = 0; $passCount = 0
-foreach ($val in $checkResults.Values) {
-    if ($val -eq "FAIL") { $failCount++ }
-    elseif ($val -eq "WARN") { $warnCount++ }
-    elseif ($val -eq "PASS") { $passCount++ }
-}
-$overallStatus = if ($failCount -gt 0) { "FAILED" } elseif ($warnCount -gt 0) { "WARNING" } else { "CLEAN" }
-
-$summaryText = "````nResult: $overallStatus ($failCount FAIL, $warnCount WARN,$passCount PASS)`n`n--- DETAILS ---`n"
-foreach ($key in $checkResults.Keys) {
-    $statusText = $checkResults[$key]
-    $summaryText += "[$statusText] $key`n"
-}
-$summaryText += "```"
-
-$finalFields = @(
-    @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true },
-    @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
-)
-
-Send-DiscordWebhook "[LIVE MATCH ALERT] USOC v1.3.0 - Integrity Report: $overallStatus" $summaryText 3447003 $finalFields
+Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $score / 100" 3447003
