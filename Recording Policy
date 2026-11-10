@@ -19,7 +19,7 @@ function Get-RobloxUserInfo {
                 foreach ($line in $content) {
                     if ($line -match 'UserId: (\d+)') {
                         $userId = $Matches[1]
-                        return @{ UserId = $userId; Username = "evilDX9user1" } # Matches active user context or pulled dynamically
+                        return @{ UserId = $userId; Username = "evilDX9user1" }
                     }
                 }
             }
@@ -30,7 +30,6 @@ function Get-RobloxUserInfo {
 
 function Get-MachineHWID {
     try {
-        $bios = Get-CimInstance Win32_BIOS -ErrorAction Stop
         $uuid = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
         if ($uuid) { return $uuid }
     } catch {}
