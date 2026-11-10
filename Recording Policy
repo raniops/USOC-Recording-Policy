@@ -49,7 +49,7 @@ function Send-DiscordWebhook($title, $description, $color = 3447003, $embedField
                 color       = $color
                 fields      = $embedFields
                 footer      = @{
-                    text = "USOC Automated Integrity Monitor v1.3.0 • $((Get-Date).ToString('MM/dd/yyyy h:mm tt'))"
+                    text = "USOC Automated Integrity Monitor v1.3.0"
                 }
                 timestamp   = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             }
@@ -68,7 +68,7 @@ $initialFields = @(
     @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
 )
 
-Send-DiscordWebhook "USOC v1.3.0 - Step 3 Live Monitor" "```[INFO] USOC v1.3.0 monitor started (Step 1: 1 FAIL, 4 WARN sections)```" 3447003 $initialFields
+Send-DiscordWebhook "USOC v1.3.0 - Step 3 Live Monitor" "[INFO] USOC v1.3.0 monitor started (Step 1: 1 FAIL, 4 WARN sections)" 3447003 $initialFields
 
 function Pause-AndScroll($label) {
     Write-Host ""
