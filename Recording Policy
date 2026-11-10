@@ -188,7 +188,6 @@ Write-Host "  - Any .exe .dll .log files sitting loose in the root" -ForegroundC
 Write-Host "  - Folders named after games that have extra subfolders" -ForegroundColor White
 Pause-AndScroll "ROAMING APPDATA LIST"
 
-# open so they can double-check if they want
 Write-Host "[ACTION] Opening Roaming AppData in Explorer..." -ForegroundColor Cyan
 Start-Process "explorer.exe" -ArgumentList $roaming
 Start-Sleep -Seconds 2
@@ -630,90 +629,14 @@ trap {
     }
     $overallStatus = if ($failCount -gt 0) { "FAILED" } elseif ($warnCount -gt 0) { "WARNING" } else { "CLEAN" }
 
-    $summaryText = "```\nResult: $overallStatus ($failCount FAIL, $warnCount WARN,$passCount PASS)`n`n--- DETAILS ---`n"
-    foreach ($key in $checkResults.Keys) {
-        $statusText = $checkResults[$key]
-        $summaryText += "[$statusText] $key`n"
+    $summaryText = "````nResult: $overallStatus ($failCount FAIL, $warnCount WARN, $passCount PASS)`n`n--- DETAILS ---`n"
+    foreach ($key in$checkResults.Keys) {
+        $statusText =$checkResults[$key]$summaryText += "[$statusText]$key`n"
     }
     $summaryText += "```"
 
     $finalFields = @(
-        @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true },
-        @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
-    )
-
-    Send-DiscordWebhook "[LIVE MATCH ALERT] USOC v1.3.0 - Integrity Report: $overallStatus" $summaryText 3447003 $finalFields
-    break 
-}
-
-while ($true) {
-    Start-Sleep -Seconds 1
-    $loopCount++
-
-    if (($loopCount % 5) -eq 0) {
-        try {
-            $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue
-            if ($null -ne $lastMemBytes -and $lastMemBytes -gt 0) {
-                $pct = [Math]::Abs($memNow - $lastMemBytes) / $lastMemBytes
-                if ($pct -gt 0.15) {
-                    $sessionMemorySpikes++
-                    $ts = Get-Date -Format "HH:mm:ss"
-                    Red "[$ts] *** MEMORY SPIKE DETECTED *** (committed change ~$([Math]::Round($pct * 100))%)"
-                    Send-DiscordWebhook "Memory Spike Detected" "Time: $ts | Change: ~$([Math]::Round($pct * 100))%" 16776960
-                }
-            }
-            $lastMemBytes = $memNow
-        } catch { }
-
-        try {
-            $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop
-            foreach ($drv in $loaded) {
-                $path = $drv.PathName
-                if (-not $path) { continue }
-                $pathLower = $path.ToLower()
-                foreach ($vuln in $vulnDriverNames) {
-                    if ($pathLower -like "*$($vuln.ToLower())*" -and -not $loadedVulnDriversSeen[$path]) {
-                        $loadedVulnDriversSeen[$path] = $true
-                        $sessionVulnDriverLoads++
-                        $ts = Get-Date -Format "HH:mm:ss"
-                        Red "[$ts] *** VULNERABLE DRIVER LOADED (RING 0) ***: $vuln"
-                        Red "    Path: $path - Ring 0 code (e.g. DbgPrint) may be executing."
-                        Send-DiscordWebhook "Vulnerable Driver Loaded (Ring 0)" "Time: $ts | Driver: $vuln | Path: $path" 15158332
-                    }
-                }
-            }
-        } catch { }
-    }
-
-    $current = $null
-    try { $current = Get-Process -ErrorAction Stop }
-    catch { continue }
-    if (-not $current) { continue }
-
-    foreach ($proc in $current) {
-        if (-not $known.ContainsKey($proc.Id)) {
-            $procPath = $null
-            try { $procPath = $proc.Path }
-            catch { }
-
-            $timestamp = Get-Date -Format "HH:mm:ss"
-            $hash = ""
-            try {
-                if ($procPath -and (Test-Path $procPath -ErrorAction SilentlyContinue)) {
-                    $hash = (Get-FileHash $procPath -Algorithm MD5 -ErrorAction SilentlyContinue).Hash
-                }
-            } catch { }
-
-            $sessionNewProcesses++
-            Write-Host "[$timestamp] NEW PROCESS" -ForegroundColor Red -NoNewline
-            Write-Host " | Name: " -NoNewline
-            Write-Host $proc.ProcessName -ForegroundColor Yellow -NoNewline
-            Write-Host " | PID: $($proc.Id)" -ForegroundColor White
-            if ($procPath) { Write-Host "          Path: $procPath" -ForegroundColor DarkYellow }
-            else { Write-Host "          Path: (access denied or unknown)" -ForegroundColor Red }
-            if ($hash) { Write-Host "          MD5:  $hash" -ForegroundColor DarkCyan }
-
-            Send-DiscordWebhook "New Process Started" "Time: $timestamp`nProcess: $($proc.ProcessName)`nPID: $($proc.Id)`nPath: $procPath`nMD5: $hash" 16776960
+        @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true }, @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true } )  Send-DiscordWebhook "[LIVE MATCH ALERT] USOC v1.3.0 - Integrity Report: $overallStatus" $summaryText 3447003 $finalFields break }  while ($true) { Start-Sleep -Seconds 1 $loopCount++  if (($loopCount \% 5) -eq 0) { try { $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue if ($null -ne $lastMemBytes -and $lastMemBytes -gt 0) { $pct = [Math]::Abs($memNow - $lastMemBytes) / $lastMemBytes if ($pct -gt 0.15) { $sessionMemorySpikes++ $ts = Get-Date -Format "HH:mm:ss" Red "[$ts] *** MEMORY SPIKE DETECTED *** (committed change ~$([Math]::Round($pct * 100))\%)" Send-DiscordWebhook "Memory Spike Detected" "Time: $ts \vert{} Change: ~$([Math]::Round($pct * 100))\%" 16776960 } } $lastMemBytes = $memNow } catch { }  try { $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop foreach ($drv in $loaded) { $path = $drv.PathName if (-not $path) { continue } $pathLower = $path.ToLower() foreach ($vuln in $vulnDriverNames) { if ($pathLower -like "*$($vuln.ToLower())*" -and -not $loadedVulnDriversSeen[$path]) { $loadedVulnDriversSeen[$path] = $true $sessionVulnDriverLoads++ $ts = Get-Date -Format "HH:mm:ss" Red "[$ts] *** VULNERABLE DRIVER LOADED (RING 0) ***: $vuln" Red "    Path: $path - Ring 0 code (e.g. DbgPrint) may be executing." Send-DiscordWebhook "Vulnerable Driver Loaded (Ring 0)" "Time: $ts \vert{} Driver: $vuln \vert{} Path: $path" 15158332 } } } } catch { } }  $current = $null try { $current = Get-Process -ErrorAction Stop } catch { continue } if (-not $current) { continue }  foreach ($proc in $current) { if (-not $known.ContainsKey($proc.Id)) { $procPath = $null try { $procPath = $proc.Path } catch { }  $timestamp = Get-Date -Format "HH:mm:ss" $hash = "" try { if ($procPath -and (Test-Path $procPath -ErrorAction SilentlyContinue)) { $hash = (Get-FileHash $procPath -Algorithm MD5 -ErrorAction SilentlyContinue).Hash } } catch { }  $sessionNewProcesses++ Write-Host "[$timestamp] NEW PROCESS" -ForegroundColor Red -NoNewline Write-Host " \vert{} Name: " -NoNewline Write-Host $proc.ProcessName -ForegroundColor Yellow -NoNewline Write-Host " \vert{} PID: $($proc.Id)" -ForegroundColor White if ($procPath) { Write-Host "          Path: $procPath" -ForegroundColor DarkYellow } else { Write-Host "          Path: (access denied or unknown)" -ForegroundColor Red } if ($hash) { Write-Host "          MD5:  $hash" -ForegroundColor DarkCyan }  Send-DiscordWebhook "New Process Started" "Time: $timestamp`nProcess: $($proc.ProcessName)`nPID: $($proc.Id)`nPath: $procPath`nMD5: $hash" 16776960
 
             try {
                 $start = $proc.StartTime
@@ -759,7 +682,7 @@ foreach ($val in $checkResults.Values) {
 }
 $overallStatus = if ($failCount -gt 0) { "FAILED" } elseif ($warnCount -gt 0) { "WARNING" } else { "CLEAN" }
 
-$summaryText = "```\nResult: $overallStatus ($failCount FAIL, $warnCount WARN,$passCount PASS)`n`n--- DETAILS ---`n"
+$summaryText = "````nResult: $overallStatus ($failCount FAIL, $warnCount WARN,$passCount PASS)`n`n--- DETAILS ---`n"
 foreach ($key in $checkResults.Keys) {
     $statusText = $checkResults[$key]
     $summaryText += "[$statusText] $key`n"
@@ -767,8 +690,8 @@ foreach ($key in $checkResults.Keys) {
 $summaryText += "```"
 
 $finalFields = @(
-    @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = `$true },
-    @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = `$true }
+    @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true },
+    @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
 )
 
 Send-DiscordWebhook "[LIVE MATCH ALERT] USOC v1.3.0 - Integrity Report: $overallStatus" $summaryText 3447003 $finalFields
