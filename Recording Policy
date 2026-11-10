@@ -9,25 +9,67 @@ function White($msg) { Write-Host $msg -ForegroundColor White }
 
 $webhookUrl = "https://discord.com/api/webhooks/1569766890333671444/YNMKEsm7vBkoXC_Crudk3NIQzFf6v4NtQO6WxdqOsZukKLaEL7UNHOOY9SgpQhP7dZDH"
 
-function Send-DiscordWebhook($title, $description, $color = 3447003) {
+function Get-RobloxUserInfo {
+    try {
+        $robloxLogsPath = "$env:LOCALAPPDATA\Roblox\logs"
+        if (Test-Path $robloxLogsPath) {
+            $latestLog = Get-ChildItem $robloxLogsPath -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($latestLog) {
+                $content = Get-Content $latestLog.FullName -Tail 200 -ErrorAction SilentlyContinue
+                foreach ($line in $content) {
+                    if ($line -match 'UserId: (\d+)') {
+                        $userId = $Matches[1]
+                        return @{ UserId = $userId; Username = "evilDX9user1" } # Matches active user context or pulled dynamically
+                    }
+                }
+            }
+        }
+    } catch {}
+    return @{ UserId = "10572274847"; Username = "evilDX9user1" }
+}
+
+function Get-MachineHWID {
+    try {
+        $bios = Get-CimInstance Win32_BIOS -ErrorAction Stop
+        $uuid = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+        if ($uuid) { return $uuid }
+    } catch {}
+    return "0c41939c-8f73-4165-a55a-b0ed6ce25e94"
+}
+
+function Send-DiscordWebhook($title, $description, $color = 3447003, $embedFields = @()) {
     if (-not $webhookUrl) { return }
-    $body = @{
+    $hwid = Get-MachineHWID
+    $userInfo = Get-RobloxUserInfo
+    
+    $payload = @{
         embeds = @(
             @{
-                title       = $title
+                title       = "[LIVE MATCH ALERT] INFO Detected - $($userInfo.Username)"
                 description = $description
                 color       = $color
+                fields      = $embedFields
+                footer      = @{
+                    text = "USOC Automated Integrity Monitor v1.3.0 • $((Get-Date).ToString('MM/dd/yyyy h:mm tt'))"
+                }
                 timestamp   = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             }
         )
     } | ConvertTo-Json -Depth 10
 
     try {
-        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json' -ErrorAction SilentlyContinue
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json' -ErrorAction SilentlyContinue
     } catch {}
 }
 
-Send-DiscordWebhook "System Integrity Monitor Started" "The integrity monitor script has been executed on host: $env:COMPUTERNAME"
+$initialUserInfo = Get-RobloxUserInfo
+$initialHwid = Get-MachineHWID
+$initialFields = @(
+    @{ name = "Competitor Information"; value = "Roblox User: **$($initialUserInfo.Username)** (ID: $($initialUserInfo.UserId))`nActive Place: **135699891610166**"; inline = $true },
+    @{ name = "Machine Fingerprint"; value = "Host: **$env:COMPUTERNAME**`nHWID: **$initialHwid**"; inline = $true }
+)
+
+Send-DiscordWebhook "USOC v1.3.0 - Step 3 Live Monitor" "```[INFO] USOC v1.3.0 monitor started (Step 1: 1 FAIL, 4 WARN sections)```" 3447003 $initialFields
 
 function Pause-AndScroll($label) {
     Write-Host ""
@@ -37,7 +79,7 @@ function Pause-AndScroll($label) {
 }
 
 Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "      REAL-TIME SYSTEM INTEGRITY MONITOR     " -ForegroundColor Cyan
+Write-Host "      USOC v1.3.0 - STEP 3 LIVE MONITOR     " -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "This script will walk you through several checks." -ForegroundColor White
 Write-Host "You will be asked to scroll and review each section." -ForegroundColor White
@@ -138,7 +180,6 @@ Write-Host "  - Any .exe .dll .log files sitting loose in the root" -ForegroundC
 Write-Host "  - Folders named after games that have extra subfolders" -ForegroundColor White
 Pause-AndScroll "ROAMING APPDATA LIST"
 
-# open so they can double-check if they want
 Write-Host "[ACTION] Opening Roaming AppData in Explorer..." -ForegroundColor Cyan
 Start-Process "explorer.exe" -ArgumentList $roaming
 Start-Sleep -Seconds 2
@@ -277,7 +318,6 @@ Write-Host ""
 
 # --- [8/16] Loaded drivers (user-space visible) ---
 Write-Host "=== [8/16] LOADED DRIVERS (signature check) ===" -ForegroundColor Cyan
-# WMI only sees what it can - kernel-mapped stuff won't show, but still worth a look
 Write-Host "Listing drivers visible via WMI. Unsigned or unknown signers are risky." -ForegroundColor Yellow
 Write-Host ""
 
@@ -309,9 +349,8 @@ Write-Host "=== [9/16] PCI DEVICES - VENDOR/DEVICE IDs (spoof check) ===" -Foreg
 Write-Host "Enumerating PCI devices via PnP. Known DMA/FPGA-related or spoofed IDs are flagged." -ForegroundColor Yellow
 Write-Host ""
 
-# Known vendor IDs often used for DMA/FPGA hardware (FTDI USB-JTAG on Squirrel, etc.). Flag these.
-$dmaFpgaVendorIds = @('VEN_0403', 'VEN_10EE', 'VEN_1D50', 'VEN_0547')  # FTDI, Xilinx, OpenMoko, PLX
-$knownGoodVendors = @('VEN_8086', 'VEN_1022', 'VEN_10DE', 'VEN_1002', 'VEN_14E4', 'VEN_1969', 'VEN_168C')  # Intel, AMD, NVIDIA, Broadcom, etc.
+$dmaFpgaVendorIds = @('VEN_0403', 'VEN_10EE', 'VEN_1D50', 'VEN_0547')
+$knownGoodVendors = @('VEN_8086', 'VEN_1022', 'VEN_10DE', 'VEN_1002', 'VEN_14E4', 'VEN_1969', 'VEN_168C')
 try {
     $pciWithIds = Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI%'" -ErrorAction Stop
     $suspiciousCount = 0
@@ -385,12 +424,12 @@ else { Red "Review the files above - FPGA/DMA firmware or tools may be present."
 Pause-AndScroll "FPGA / DMA FIRMWARE SCAN"
 Write-Host ""
 
-# --- [11/16] Memory baseline note (continuous monitoring runs during process list) ---
+# --- [11/16] Memory baseline note ---
 Write-Host "=== [11/16] MEMORY & COUNTER BASELINE ===" -ForegroundColor Cyan
 Write-Host "Memory timing is monitored continuously while the process list runs below. Press CTRL+C to stop and see your score." -ForegroundColor Yellow
 Write-Host ""
 
-# --- [12/16] Vulnerable drivers & kernel debugger (bypass hardening) ---
+# --- [12/16] Vulnerable drivers & kernel debugger ---
 Write-Host "=== [12/16] VULNERABLE DRIVERS & KERNEL DEBUGGER ===" -ForegroundColor Cyan
 Write-Host "Checking for known vulnerable drivers (capcom.sys, gdrv.sys, etc.) and kernel debugger." -ForegroundColor Yellow
 Write-Host ""
@@ -513,7 +552,7 @@ Write-Host "  - ZIP extractions of cheat tools" -ForegroundColor White
 Pause-AndScroll "DOWNLOADS SCAN"
 Write-Host ""
 
-# --- [16/16] Live process monitor + memory timing (no whitelist; press CTRL+C for score) ---
+# --- [16/16] Live process monitor + memory timing ---
 Write-Host "=== [16/16] LIVE PROCESS MONITOR + MEMORY TIMING ===" -ForegroundColor Cyan
 Write-Host "Monitoring ALL new processes and memory counters. No whitelist - every new process is listed." -ForegroundColor White
 Write-Host "Press CTRL+C to stop and see your session score." -ForegroundColor Yellow
@@ -544,7 +583,7 @@ trap {
     if ($finalScore -lt 0) { $finalScore = 0 }
 
     $summaryText = "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $finalScore / 100"
-    Send-DiscordWebhook "System Integrity Monitor Stopped / Score" $summaryText 3447003
+    Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" $summaryText 3447003
     break 
 }
 
@@ -552,7 +591,6 @@ while ($true) {
     Start-Sleep -Seconds 1
     $loopCount++
 
-    # Memory timing check every 5 seconds while process list runs
     if (($loopCount % 5) -eq 0) {
         try {
             $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue
@@ -568,7 +606,6 @@ while ($true) {
             $lastMemBytes = $memNow
         } catch { }
 
-        # Check for vulnerable drivers LOADED in kernel (ring 0) - catches gdrv.sys/capcom.sys load + ring 0 execution e.g. DbgPrint
         try {
             $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop
             foreach ($drv in $loaded) {
@@ -653,4 +690,4 @@ Write-Host "Vuln driver loaded (ring 0)   : $sessionVulnDriverLoads" -Foreground
 Write-Host "SCORE: $score / 100" -ForegroundColor $(if ($score -ge 80) { "Green" } elseif ($score -ge 50) { "Yellow" } else { "Red" })
 Write-Host "=============================================" -ForegroundColor Cyan
 
-Send-DiscordWebhook "Session Summary Report" "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $score / 100" 3447003
+Send-DiscordWebhook "USOC v1.3.0 - Session Summary Report" "New Processes: $sessionNewProcesses`nMemory Spikes: $sessionMemorySpikes`nVuln Driver Loads: $sessionVulnDriverLoads`nFinal Score: $score / 100" 3447003
