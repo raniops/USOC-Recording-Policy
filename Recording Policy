@@ -2,7 +2,7 @@
 Clear-Host
 
 # ==========================================
-# WEBHOOK REPORTING & ANALYSIS SYSTEM
+# USOC v1.3.0 - BUFFERED WEBHOOK REPORTER
 # ==========================================
 $webhookUrl = "https://discord.com/api/webhooks/1569766890333671444/YNMKEsm7vBkoXC_Crudk3NIQzFf6v4NtQO6WxdqOsZukKLaEL7UNHOOY9SgpQhP7dZDH"
 $script:CheckResults = [ordered]@{}
@@ -33,8 +33,10 @@ function Get-MachineHWID {
     return "0c41939c-8f73-4165-a55a-b0ed6ce25e94"
 }
 
-function Send-DiscordAnalysisReport {
-    if (-not $webhookUrl) { return }
+function Send-DiscordFinalReport {
+    if (-not $webhookUrl) { return [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    
     $userInfo = Get-RobloxUserInfo
     $hwid = Get-MachineHWID
 
@@ -49,9 +51,9 @@ function Send-DiscordAnalysisReport {
     $embedColor = if ($failCount -gt 0) { 15158332 } elseif ($warnCount -gt 0) { 16776960 } else { 3066993 }
 
     $description = "````" + "`n"
-    $description += "Analysis Completed: $((Get-Date).ToString('h:mm tt'))`n"
+    $description += "Session Completed: $((Get-Date).ToString('h:mm tt'))`n"
     $description += "Overall Status: $overallStatus ($failCount FAIL, $warnCount WARN,$passCount PASS)`n`n"
-    $description += "--- INTEGRITY CHECK RESULTS ---`n"
+    $description += "--- ALL 16 STEPS RESULTS ---`n"
     foreach ($key in $script:CheckResults.Keys) {
         $statusText = $script:CheckResults[$key]
         $description += "[$statusText] $key`n"
@@ -66,7 +68,7 @@ function Send-DiscordAnalysisReport {
     $payload = @{
         embeds = @(
             @{
-                title       = "[LIVE MATCH ALERT] USOC v1.3.0 - Analysis Report: $overallStatus"
+                title       = "[LIVE MATCH ALERT] USOC v1.3.0 - Final Summary Report: $overallStatus"
                 description = $description
                 color       = $embedColor
                 fields      = $embedFields
@@ -79,7 +81,7 @@ function Send-DiscordAnalysisReport {
     } | ConvertTo-Json -Depth 10
 
     try {
-        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json' -ErrorAction SilentlyContinue
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json' -ErrorAction Stop
     } catch {}
 }
 
@@ -116,7 +118,7 @@ try {
     if (-not (Test-Path $prefetchPath -ErrorAction Stop)) {
         Red "Prefetch folder not found or not accessible. Try running as Administrator."
         Red "Possible tampering or blocking - path missing."
-        $script:CheckResults["Prefetch Files"] = "FAIL"
+        $script:CheckResults["1. Prefetch Files"] = "FAIL"
     } else {
         $prefetchOk = $true
         $pfItems = Get-ChildItem $prefetchPath -Filter "*.pf" -ErrorAction Stop
@@ -124,12 +126,12 @@ try {
             $name = $_.Name -replace "-[A-F0-9]+\.pf$", ""
             Write-Host "$($_.LastWriteTime)  |  $name" -ForegroundColor Yellow
         }
-        $script:CheckResults["Prefetch Files"] = "PASS"
+        $script:CheckResults["1. Prefetch Files"] = "PASS"
     }
 } catch {
     Red "Prefetch folder access denied or error: $($_.Exception.Message)"
     Red "Possible blocking or tampering - check could not complete."
-    $script:CheckResults["Prefetch Files"] = "FAIL"
+    $script:CheckResults["1. Prefetch Files"] = "FAIL"
 }
 
 Write-Host ""
@@ -157,11 +159,11 @@ try {
         if ($_.PSIsContainer) { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor White }
         else { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor Yellow }
     }
-    $script:CheckResults["Local AppData"] = "PASS"
+    $script:CheckResults["2. Local AppData"] = "PASS"
 } catch {
     Red "LocalAppData access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
-    $script:CheckResults["Local AppData"] = "FAIL"
+    $script:CheckResults["2. Local AppData"] = "FAIL"
 }
 
 Write-Host ""
@@ -187,11 +189,11 @@ try {
         if ($_.PSIsContainer) { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor White }
         else { Write-Host "$($_.LastWriteTime)  |  $($_.Name)" -ForegroundColor Yellow }
     }
-    $script:CheckResults["Roaming AppData"] = "PASS"
+    $script:CheckResults["3. Roaming AppData"] = "PASS"
 } catch {
     Red "Roaming AppData access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
-    $script:CheckResults["Roaming AppData"] = "FAIL"
+    $script:CheckResults["3. Roaming AppData"] = "FAIL"
 }
 
 Write-Host ""
@@ -217,11 +219,11 @@ try {
     Green "IOAVProtection     : $($mp.IOAVProtectionEnabled)"
     Green "TamperProtection   : $($mp.IsTamperProtected)"
     Green "AntispywareEnabled : $($mp.AntispywareEnabled)"
-    $script:CheckResults["Windows Defender Status"] = "PASS"
+    $script:CheckResults["4. Windows Defender Status"] = "PASS"
 } catch {
     Red "Defender status query failed: $($_.Exception.Message)"
     Red "Possible tampering or WMI/Defender blocked - treat as suspicious."
-    $script:CheckResults["Windows Defender Status"] = "FAIL"
+    $script:CheckResults["4. Windows Defender Status"] = "FAIL"
 }
 Pause-AndScroll "DEFENDER STATUS"
 Write-Host ""
@@ -236,13 +238,13 @@ try {
     if ($pref.ExclusionPath) {
         Red "!! Defender Exclusion PATHS found - these should not be here !!"
         $pref.ExclusionPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-        $script:CheckResults["Defender Exclusions"] = "WARN"
+        $script:CheckResults["5. Defender Exclusions"] = "WARN"
     } else { Green "No exclusion paths found - GOOD" }
 
     if ($pref.ExclusionProcess) {
         Red "!! Defender Exclusion PROCESSES found !!"
         $pref.ExclusionProcess | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-        $script:CheckResults["Defender Exclusions"] = "WARN"
+        $script:CheckResults["5. Defender Exclusions"] = "WARN"
     } else { Green "No exclusion processes found - GOOD" }
 
     if ($pref.ExclusionExtension) {
@@ -251,12 +253,12 @@ try {
     } else { Green "No exclusion extensions found - GOOD" }
 
     if (-not $pref.ExclusionPath -and -not $pref.ExclusionProcess) {
-        $script:CheckResults["Defender Exclusions"] = "PASS"
+        $script:CheckResults["5. Defender Exclusions"] = "PASS"
     }
 } catch {
     Red "Defender preferences query failed: $($_.Exception.Message)"
     Red "Possible tampering or access blocked - treat as suspicious."
-    $script:CheckResults["Defender Exclusions"] = "FAIL"
+    $script:CheckResults["5. Defender Exclusions"] = "FAIL"
 }
 Pause-AndScroll "DEFENDER EXCLUSIONS"
 Write-Host "`n"
@@ -309,10 +311,10 @@ try {
 
 if (-not ($tpmOk -and $virtOk -and $secureBootOk)) {
     Red "REQUIREMENT NOT MET: TPM, Virtualization, and Secure Boot must all be ON. Fix in BIOS/UEFI and re-run."
-    $script:CheckResults["Hardware Security (TPM/SB/Virt)"] = "FAIL"
+    $script:CheckResults["6. Hardware Security (TPM/SB/Virt)"] = "FAIL"
 } else {
     Green "All three requirements satisfied: TPM, Virtualization, Secure Boot are ON."
-    $script:CheckResults["Hardware Security (TPM/SB/Virt)"] = "PASS"
+    $script:CheckResults["6. Hardware Security (TPM/SB/Virt)"] = "PASS"
 }
 Pause-AndScroll "TPM / VIRTUALIZATION / SECURE BOOT"
 Write-Host ""
@@ -325,15 +327,15 @@ try {
     $hvciOk = $true
     if ($hvci.Enabled -eq 1) { 
         Green "Memory Integrity: ENABLED"
-        $script:CheckResults["Memory Integrity (HVCI)"] = "PASS"
+        $script:CheckResults["7. Memory Integrity (HVCI)"] = "PASS"
     } else { 
         Red "Memory Integrity: DISABLED - cheats can inject drivers more easily"
-        $script:CheckResults["Memory Integrity (HVCI)"] = "WARN"
+        $script:CheckResults["7. Memory Integrity (HVCI)"] = "WARN"
     }
 } catch {
     Red "HVCI registry read failed: $($_.Exception.Message)"
     Red "Possible tampering or access denied - cannot confirm Memory Integrity status."
-    $script:CheckResults["Memory Integrity (HVCI)"] = "FAIL"
+    $script:CheckResults["7. Memory Integrity (HVCI)"] = "FAIL"
 }
 
 try {
@@ -350,7 +352,6 @@ Write-Host ""
 
 # --- [8/16] Loaded drivers (user-space visible) ---
 Write-Host "=== [8/16] LOADED DRIVERS (signature check) ===" -ForegroundColor Cyan
-# WMI only sees what it can - kernel-mapped stuff won't show, but still worth a look
 Write-Host "Listing drivers visible via WMI. Unsigned or unknown signers are risky." -ForegroundColor Yellow
 Write-Host ""
 
@@ -366,15 +367,15 @@ try {
     }
     if ($unsignedCount -eq 0) {
         Green "No unsigned drivers reported by WMI (good)."
-        $script:CheckResults["Driver Signatures"] = "PASS"
+        $script:CheckResults["8. Driver Signatures"] = "PASS"
     } else {
         Red "Found $unsignedCount unsigned driver(s) - review above."
-        $script:CheckResults["Driver Signatures"] = "WARN"
+        $script:CheckResults["8. Driver Signatures"] = "WARN"
     }
 } catch {
     Red "Driver enumeration failed: $($_.Exception.Message)"
     Red "Possible tampering or WMI blocked - cannot verify driver signatures."
-    $script:CheckResults["Driver Signatures"] = "FAIL"
+    $script:CheckResults["8. Driver Signatures"] = "FAIL"
 }
 Pause-AndScroll "LOADED DRIVERS"
 Write-Host ""
@@ -384,9 +385,8 @@ Write-Host "=== [9/16] PCI DEVICES - VENDOR/DEVICE IDs (spoof check) ===" -Foreg
 Write-Host "Enumerating PCI devices via PnP. Known DMA/FPGA-related or spoofed IDs are flagged." -ForegroundColor Yellow
 Write-Host ""
 
-# Known vendor IDs often used for DMA/FPGA hardware (FTDI USB-JTAG on Squirrel, etc.). Flag these.
-$dmaFpgaVendorIds = @('VEN_0403', 'VEN_10EE', 'VEN_1D50', 'VEN_0547')  # FTDI, Xilinx, OpenMoko, PLX
-$knownGoodVendors = @('VEN_8086', 'VEN_1022', 'VEN_10DE', 'VEN_1002', 'VEN_14E4', 'VEN_1969', 'VEN_168C')  # Intel, AMD, NVIDIA, Broadcom, etc.
+$dmaFpgaVendorIds = @('VEN_0403', 'VEN_10EE', 'VEN_1D50', 'VEN_0547')
+$knownGoodVendors = @('VEN_8086', 'VEN_1022', 'VEN_10DE', 'VEN_1002', 'VEN_14E4', 'VEN_1969', 'VEN_168C')
 try {
     $pciWithIds = Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI%'" -ErrorAction Stop
     $suspiciousCount = 0
@@ -410,15 +410,15 @@ try {
     }
     if ($suspiciousCount -eq 0) {
         Green "No known DMA/FPGA-related PCI vendor IDs found in enumeration."
-        $script:CheckResults["PCI / DMA Hardware Check"] = "PASS"
+        $script:CheckResults["9. PCI / DMA Hardware Check"] = "PASS"
     } else {
         Red "Found $suspiciousCount device(s) with DMA/FPGA-associated vendor IDs - investigate."
-        $script:CheckResults["PCI / DMA Hardware Check"] = "FAIL"
+        $script:CheckResults["9. PCI / DMA Hardware Check"] = "FAIL"
     }
 } catch {
     Red "PCI device enumeration failed: $($_.Exception.Message)"
     Red "Possible tampering or access denied - cannot verify PCI configuration."
-    $script:CheckResults["PCI / DMA Hardware Check"] = "FAIL"
+    $script:CheckResults["9. PCI / DMA Hardware Check"] = "FAIL"
 }
 Pause-AndScroll "PCI VENDOR/DEVICE IDs"
 Write-Host ""
@@ -457,21 +457,21 @@ foreach ($dir in $scanDirs) {
 }
 if (-not $foundSuspicious) { 
     Green "No FPGA bitstreams or obvious DMA-related filenames found in user folders." 
-    $script:CheckResults["FPGA Firmware Scan"] = "PASS"
+    $script:CheckResults["10. FPGA Firmware Scan"] = "PASS"
 } else { 
     Red "Review the files above - FPGA/DMA firmware or tools may be present." 
-    $script:CheckResults["FPGA Firmware Scan"] = "FAIL"
+    $script:CheckResults["10. FPGA Firmware Scan"] = "FAIL"
 }
 Pause-AndScroll "FPGA / DMA FIRMWARE SCAN"
 Write-Host ""
 
-# --- [11/16] Memory baseline note (continuous monitoring runs during process list) ---
+# --- [11/16] Memory baseline note ---
 Write-Host "=== [11/16] MEMORY & COUNTER BASELINE ===" -ForegroundColor Cyan
 Write-Host "Memory timing is monitored continuously while the process list runs below. Press CTRL+C to stop and see your score." -ForegroundColor Yellow
 Write-Host ""
-$script:CheckResults["Memory Baseline"] = "PASS"
+$script:CheckResults["11. Memory Baseline"] = "PASS"
 
-# --- [12/16] Vulnerable drivers & kernel debugger (bypass hardening) ---
+# --- [12/16] Vulnerable drivers & kernel debugger ---
 Write-Host "=== [12/16] VULNERABLE DRIVERS & KERNEL DEBUGGER ===" -ForegroundColor Cyan
 Write-Host "Checking for known vulnerable drivers (capcom.sys, gdrv.sys, etc.) and kernel debugger." -ForegroundColor Yellow
 Write-Host ""
@@ -489,13 +489,13 @@ try {
     }
     if (-not $foundVuln) { 
         Green "No known vulnerable drivers found in System32\drivers." 
-        $script:CheckResults["Vulnerable Drivers / Debugger"] = "PASS"
+        $script:CheckResults["12. Vulnerable Drivers / Debugger"] = "PASS"
     } else {
-        $script:CheckResults["Vulnerable Drivers / Debugger"] = "FAIL"
+        $script:CheckResults["12. Vulnerable Drivers / Debugger"] = "FAIL"
     }
 } catch {
     Red "Driver path check failed: $($_.Exception.Message)"
-    $script:CheckResults["Vulnerable Drivers / Debugger"] = "FAIL"
+    $script:CheckResults["12. Vulnerable Drivers / Debugger"] = "FAIL"
 }
 
 try {
@@ -549,7 +549,7 @@ foreach ($rk in $runKeys) {
         }
     }
 }
-$script:CheckResults["Startup Run Keys"] = "PASS"
+$script:CheckResults["13. Startup Run Keys"] = "PASS"
 Pause-AndScroll "STARTUP / RUN KEYS"
 Write-Host ""
 
@@ -568,7 +568,7 @@ try {
     Red "Malwarebytes registry read failed: $($_.Exception.Message)"
     Red "Possible access denied - treat as suspicious."
 }
-$script:CheckResults["Malwarebytes Exclusions"] = "PASS"
+$script:CheckResults["14. Malwarebytes Exclusions"] = "PASS"
 Pause-AndScroll "MALWAREBYTES SECTION"
 Write-Host ""
 
@@ -587,11 +587,11 @@ try {
                 Red "  ^^ UNSIGNED or INVALID - review"
             }
         }
-    $script:CheckResults["Downloads Folder Scan"] = "PASS"
+    $script:CheckResults["15. Downloads Folder Scan"] = "PASS"
 } catch {
     Red "Downloads folder access denied or error: $($_.Exception.Message)"
     Red "Possible tampering or blocking - check could not complete."
-    $script:CheckResults["Downloads Folder Scan"] = "FAIL"
+    $script:CheckResults["15. Downloads Folder Scan"] = "FAIL"
 }
 
 Write-Host ""
@@ -601,7 +601,7 @@ Write-Host "  - ZIP extractions of cheat tools" -ForegroundColor White
 Pause-AndScroll "DOWNLOADS SCAN"
 Write-Host ""
 
-# --- [16/16] Live process monitor + memory timing (no whitelist; press CTRL+C for score) ---
+# --- [16/16] Live process monitor + memory timing ---
 Write-Host "=== [16/16] LIVE PROCESS MONITOR + MEMORY TIMING ===" -ForegroundColor Cyan
 Write-Host "Monitoring ALL new processes and memory counters. No whitelist - every new process is listed." -ForegroundColor White
 Write-Host "Press CTRL+C to stop and see your session score." -ForegroundColor Yellow
@@ -625,8 +625,8 @@ Write-Host "Baseline captured. Watching for new processes, memory spikes, and lo
 Write-Host ""
 
 trap { 
-    $script:CheckResults["Live Process Monitor"] = "PASS"
-    Send-DiscordAnalysisReport
+    $script:CheckResults["16. Live Process Monitor"] = "PASS"
+    Send-DiscordFinalReport
     break 
 }
 
@@ -634,7 +634,6 @@ while ($true) {
     Start-Sleep -Seconds 1
     $loopCount++
 
-    # Memory timing check every 5 seconds while process list runs
     if (($loopCount % 5) -eq 0) {
         try {
             $memNow = (Get-Counter '\Memory\Committed Bytes' -ErrorAction Stop).CounterSamples.CookedValue
@@ -649,7 +648,6 @@ while ($true) {
             $lastMemBytes = $memNow
         } catch { }
 
-        # Check for vulnerable drivers LOADED in kernel (ring 0) - catches gdrv.sys/capcom.sys load + ring 0 execution e.g. DbgPrint
         try {
             $loaded = Get-CimInstance Win32_SystemDriver -ErrorAction Stop
             foreach ($drv in $loaded) {
@@ -730,6 +728,6 @@ Write-Host "Vuln driver loaded (ring 0)   : $sessionVulnDriverLoads" -Foreground
 Write-Host "SCORE: $score / 100" -ForegroundColor $(if ($score -ge 80) { "Green" } elseif ($score -ge 50) { "Yellow" } else { "Red" })
 Write-Host "=============================================" -ForegroundColor Cyan
 
-# Send final analysis report to webhook
-$script:CheckResults["Live Process Monitor"] = "PASS"
-Send-DiscordAnalysisReport
+# Final Buffer Dispatch
+$script:CheckResults["16. Live Process Monitor"] = "PASS"
+Send-DiscordFinalReport
